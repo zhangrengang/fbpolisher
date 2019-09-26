@@ -1,0 +1,13 @@
+sleep 20s && echo yers && touch a
+date 
+sleep 20s && echo yers && touch a
+date 
+sleep 20s && echo yers && touch a
+date 
+sleep 20s && echo yers && touch a
+==date 
+==sleep 20s && echo yers && touch a
+==date 
+==sleep 20s && echo yers && touch a
+==date 
+==
