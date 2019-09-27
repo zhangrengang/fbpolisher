@@ -5,7 +5,7 @@ bindir = os.path.dirname(os.path.realpath(__file__))
 
 def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq', **job_args):
 	template = '{cat} {file} | python {dir}/split_records.py --chunk-size {size} --prefix {prefix} --format {format} -pfn > {filenames}'
-	pre_tplt = '{dir}/{id}-R{end}'
+	pre_tplt = '{dir}/{id}_R{end}'
 	if ckpt is None:
 		ckpt = '{}.list'.format(out_dir)
 	reads1, reads2, samples = parse_list(reads_list)
@@ -27,8 +27,10 @@ def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq
 				)
 			cmds.append(cmd)
 	cmd_file = '{}.cmds'.format(out_dir)
+	job_args['cpu'], job_args['mem'] = 1, '1g'
 	uncompleted = run_job(cmd_file, cmds, **job_args)
-
+	if not uncompleted == 0:
+		raise ValueError('chunk failed. see {}.out'.format(cmd_file))
 	# output list
 	i = 0
 	fp = open(ckpt, 'w')
@@ -41,7 +43,7 @@ def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq
 			r2_files = [line.strip() for line in open(r2_list)]
 		else:
 			r2_files = [''] * len(r1_files)
-		assert len(r1_file) == len(r2_files)
+		assert len(r1_files) == len(r2_files)
 		for sr1, sr2 in zip(r1_files, r2_files):
 			print >>fp, '\t'.join([sr1,sr2,sample])
 	fp.close()

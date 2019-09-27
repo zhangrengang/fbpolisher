@@ -3,6 +3,7 @@
 '''RUN system CoMmanDS in Multi-Processing'''
 import sys
 import os, stat
+import psutil
 import subprocess
 from optparse import OptionParser
 import logging
@@ -25,6 +26,7 @@ class Grid(object):
 	def __init__(self, cmd_list=None, 
 			work_dir=None, out_path=None, 
 			err_path=None, grid_opts='',
+			cpu=1, mem='1g',
 			tc_tasks = None, script=None,
 			join_files=True):
 		self.cmd_list = cmd_list
@@ -33,6 +35,8 @@ class Grid(object):
 		if tc_tasks is not None:
 			if self.grid == 'sge':
 				self.grid_opts += ' -tc {}'.format(tc_tasks)
+		if self.grid == 'sge':
+			self.grid_opts = self.grid_opts.format(cpu=cpu, mem=mem)
 		if self.cmd_list is not None:
 			self.script = script
 			if self.script is None:
@@ -62,7 +66,7 @@ class Grid(object):
 	def make_script(self, fout=sys.stdout):
 		print >> fout, '#!/bin/bash'
 		if self.grid == 'sge':
-			print >> fout, '#$ {}'.format(self.grid_opts)
+#			print >> fout, '#$ {}'.format(self.grid_opts)
 			template = 'if [ $SGE_TASK_ID -eq {id} ]; then\n{cmd}\nfi'
 		for i, cmd in enumerate(self.cmd_list):
 			grid_cmd = template.format(id=i+1, cmd=cmd)
@@ -73,7 +77,7 @@ class Grid(object):
 		s.initialize()
 		jt = s.createJobTemplate()
 		jt.jobEnvironment = os.environ.copy()
-#		jt.nativeSpecification = self.grid_opts
+		jt.nativeSpecification = self.grid_opts
 		jt.remoteCommand = self.script
 		jt.workingDirectory = self.work_dir
 		jt.outputPath = self.out_path
@@ -81,9 +85,11 @@ class Grid(object):
 		logger.info('submiting {}'.format([self.script, self.grid_opts]))
 		jt.joinFiles = self.join_files
 		joblist = s.runBulkJobs(jt, 1, len(self.cmd_list), 1)
+		jobid = joblist[0].split('.')[0]
+		_qsub_log(jobid, self.work_dir, self.script)
 		#jid = s.runJob(jt)
 		s.synchronize(joblist, drmaa.Session.TIMEOUT_WAIT_FOREVER, False)
-		logger.info('waiting for [] tasks'.format(len(joblist)))
+		logger.info('waiting for {} tasks'.format(len(joblist)))
 		for curjob in joblist:
 			try:
 				retval = s.wait(curjob, drmaa.Session.TIMEOUT_WAIT_FOREVER)
@@ -97,8 +103,6 @@ class Grid(object):
 			job_status += [(task_id, status)]
 		s.deleteJobTemplate(jt)
 		s.exit()
-		jobid = task_id.split('.')[0]
-		_qsub_log(jobid, self.work_dir, self.script)
 		return job_status
 	def which_grid(self):
 		with drmaa.Session() as s:
@@ -106,8 +110,12 @@ class Grid(object):
 		grid, version = name.split()
 		if grid == 'OGS/GE':
 			return 'sge'
-def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='', 
+def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='', cpu=1, mem='1g', cont=1,
 			retry=1, script=None, out_path=None, completed=None, cmd_sep='\n', **kargs):
+	if not cmd_list:
+		logger.info('cmd_list with 0 command. exit with 0')
+		return 0
+
 	variables = vars()
 	del variables['cmd_list']
 	logger.info( 'VARS: {}'.format(variables))
@@ -115,27 +123,36 @@ def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='',
 	close_cmp = False
 	# file name
 	if completed is not None and not isinstance(completed, file):
-		completed = open(completed, 'w')
+		xmod = 'a' if cont else 'w'
+		completed = open(completed, xmod)
 		close_cmp = True
 	ntry = 0
 	out_path0 = out_path
+	tc_tasks0 = tc_tasks
 	while True:
 		ntry += 1
-		logger.info('to run {} commands: try {}'.format(len(cmd_list), ntry))
-		if out_path is not None:
-			out_path = '{}.{}'.format(out_path0, ntry)
+		logger.info('running {} commands: try {}'.format(len(cmd_list), ntry))
+#		if out_path is not None:
+#			out_path = '{}.{}'.format(out_path0, ntry)
 		if mode == 'grid':
-			job = Grid(cmd_list=cmd_list, tc_tasks=tc_tasks, grid_opts=grid_opts, script=script, out_path=out_path, **kargs)
+			avail_tasks = [tc_tasks0, len(cmd_list)]
+			tc_tasks = min(avail_tasks)
+			logger.info('reset tc_tasks to {} by {}'.format(tc_tasks, avail_tasks))
+			job = Grid(cmd_list=cmd_list, tc_tasks=tc_tasks, grid_opts=grid_opts, 
+						script=script, out_path=out_path, cpu=cpu, mem=mem, **kargs)
 			logger.info('submiting jobs with {}'.format(job.grid))
 			job_status = job.submit()
 			exit_codes = [status for (task_id, status) in job_status]
 		elif mode == 'local':
+			avail_tasks = [tc_tasks0, avail_cpu(cpu), avail_mem(mem), len(cmd_list)]
+			tc_tasks = min(avail_tasks)
+			logger.info('reset tc_tasks to {} by {}'.format(tc_tasks, avail_tasks))
 			job_status = pp_run(cmd_list, processors=tc_tasks)
 			exit_codes = []
 			fout = open(out_path, 'w') if out_path is not None else None
 			for (stdout, stderr, status) in job_status:
 				if fout is not None:
-					print >>fout, '>>STDOUT\n{}\n>>STDERR\n{}'.format(stdout, stderr)
+					print >>fout, '>>STATUS\n{}\n>>STDOUT\n{}\n>>STDERR\n{}'.format(status, stdout, stderr)
 				exit_codes += [status]
 			if fout is not None:
 				fout.close()
@@ -145,7 +162,7 @@ def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='',
 				uncmp += [cmd]
 			elif completed is not None:
 				completed.write(cmd + cmd_sep)
-		if ntry > retry or not uncmp:
+		if ntry >= retry or not uncmp:
 			logger.info('finished with {} commands uncompleted'.format(len(uncmp)))
 			break
 		cmd_list = uncmp
@@ -154,6 +171,23 @@ def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='',
 		completed.close()
 	# if completed?
 	return len(uncmp)
+def avail_cpu(cpu):
+	import psutil
+	cpu_count = psutil.cpu_count()
+	return max(1, int(1.0*cpu_count/cpu))
+def avail_mem(mem):
+	memory = psutil.virtual_memory()
+	mem_free = memory.available
+	mem = mem2float(mem)
+	return max(1, int(1.0*mem_free/mem))
+def mem2float(mem):
+	import re
+	d_mem = {'':1e1, 'k':1e3, 'm':1e6, 'g':1e9, 't':1e12}
+	try:
+		num, unit = re.compile(r'(\d+\.?\d*)([kmgt]?)', re.I).match(mem).groups()
+		return float(num) * d_mem[unit.lower()]
+	except AttributeError:
+		raise AttributeError('Illegal MEMORY string `{}` (legal: 2g, 100m, 0.3t).'.format(mem))
 def _qsub_log(jid, pwd, cmd):
     wlog = '''LOGFILE=/share/sge/default/common/working_dirs
 JID={}
@@ -329,18 +363,31 @@ def main():
 	run_job(cmd_file, tc_tasks=processors, mode=mode, grid_opts=grid_opts,
                 cont=to_be_continue, retry=retry, cmd_sep=separation)
 def run_job(cmd_file, cmd_list=None, tc_tasks=8, mode='grid', grid_opts='', cont=1,
-            retry=1, out_path=None, cmd_sep='\n', **kargs):
+            ckpt=None, retry=1, out_path=None, cmd_sep='\n', **kargs):
 	if cmd_list is not None:
 		with open(cmd_file, 'w') as fp:
 			for cmd in cmd_list:
 				print >> fp, cmd
+	if kargs.get('cpu') is None:
+		kargs['cpu'] = 1
+	if kargs.get('mem') is None:
+		kargs['mem'] = '1g'
+	ckpt = cmd_file + '.ok' if ckpt is None else ckpt
+	if cont and os.path.exists(ckpt):
+		logger.info('check point file `{}` exists, skipped'.format(ckpt))
+		return 0
 	script = cmd_file + '.sh' if mode == 'grid' else None
 	out_path = cmd_file + '.out' if out_path is None else out_path
 	cmd_cpd_file = cmd_file + '.completed'
 	cmd_list = get_cmd_list(cmd_file, cmd_cpd_file, cmd_sep=cmd_sep, cont=cont)
-	run_tasks(cmd_list, tc_tasks=tc_tasks, mode=mode, grid_opts=grid_opts, 
-				retry=retry, script=script, out_path=out_path, 
-				completed=cmd_cpd_file, cmd_sep=cmd_sep)
+	exit = run_tasks(cmd_list, tc_tasks=tc_tasks, mode=mode, grid_opts=grid_opts, 
+				retry=retry, script=script, out_path=out_path, cont=cont,
+				completed=cmd_cpd_file, cmd_sep=cmd_sep, **kargs)
+	if not exit == 0:
+		raise ValueError('faild to run {}, see detail in {}'.format(cmd_file, out_path))
+	else:
+		os.mknod(ckpt)
+	return exit
 
 if __name__ == '__main__':
 	main()

@@ -1,11 +1,15 @@
+import os
 import sys
-MERGE_TEMPLATE = 'samtools merge {outbam} {inbams} {merge_opts}'
+import shutil
+from RunCmdsMP import run_job
+
+MERGE_TEMPLATE = 'samtools merge -f {outbam} {inbams} {merge_opts}'
 INDEX_TEMPLATE = 'samtools index {inbam} {index_opts}'
 CALL_TEMPLATE = {
 	'freebayes': 'freebayes -f {genome} -r {region} {bam} {call_opts} > {outvcf}'
 	}
 def call_variants(ref, bams, out_dir, prefix=None, merge_opts='', index_opts='',
-		bin_size=1000000, caller='freebayes', call_opts='', filt_opts='-f QUAL > 20'):
+		bin_size=1000000, caller='freebayes', call_opts='', filt_opts='-f QUAL > 20', **job_args):
 	if prefix is None:
 		prefix = out_dir
 	uncompleted = 0
@@ -21,7 +25,7 @@ def call_variants(ref, bams, out_dir, prefix=None, merge_opts='', index_opts='',
 		bam = '{}/merged.bam'.format(out_dir)
 		inbams = ' '.join(bams)
 		cmd = MERGE_TEMPLATE.format(outbam=bam, inbams=inbams, merge_opts=merge_opts)
-		cmd += ' && ' + INDEX_TEMPLATE.format(bam=bam, index_opts=index_opts)
+		cmd += ' && ' + INDEX_TEMPLATE.format(inbam=bam, index_opts=index_opts)
 		cmds += [cmd]
 	cmd_file = '{}.precall.cmds'.format(out_dir)
 	if cmds:
