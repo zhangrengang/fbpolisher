@@ -3,6 +3,7 @@
 '''RUN system CoMmanDS in Multi-Processing'''
 import sys
 import os, stat
+import shutil
 import psutil
 import subprocess
 from optparse import OptionParser
@@ -32,11 +33,11 @@ class Grid(object):
 		self.cmd_list = cmd_list
 		self.grid = self.which_grid()
 		self.grid_opts = grid_opts
-		if tc_tasks is not None:
-			if self.grid == 'sge':
-				self.grid_opts += ' -tc {}'.format(tc_tasks)
-		if self.grid == 'sge':
-			self.grid_opts = self.grid_opts.format(cpu=cpu, mem=mem)
+#		if tc_tasks is not None:
+#			if self.grid == 'sge':
+#				self.grid_opts += ' -tc {}'.format(tc_tasks)
+#		if self.grid == 'sge':
+		self.grid_opts = self.grid_opts.format(cpu=cpu, mem=mem, tc=tc_tasks)
 		if self.cmd_list is not None:
 			self.script = script
 			if self.script is None:
@@ -97,7 +98,7 @@ class Grid(object):
 				logger.warn('Job {}: {}'.format(curjob, e))
 				job_status += [(None, 1)]
 				continue
-			logger.info('Job: {0} finished with status {1}, exit code {2}'.format(
+			logger.info('Task: {0} finished with status {1}, exit code {2}'.format(
 					retval.jobId, retval.hasExited, retval.exitStatus))
 			task_id, status = retval.jobId, (not retval.hasExited) + retval.exitStatus
 			job_status += [(task_id, status)]
@@ -345,7 +346,7 @@ def main():
 					dest="retry", default=1, \
 					help="retry times [default=%default]")
 	parser.add_option("--grid-opts", action="store", type="string",\
-					dest="grid_opts", default='-S /bin/bash', \
+					dest="grid_opts", default='-tc {tc} -l h_vmem={mem} -pe mpi {cpu}', \
 					help='grid options [default="%default"]')
 	(options,args)=parser.parse_args()
 	if not args:
@@ -379,6 +380,10 @@ def run_job(cmd_file, cmd_list=None, tc_tasks=8, mode='grid', grid_opts='', cont
 	script = cmd_file + '.sh' if mode == 'grid' else None
 	out_path = cmd_file + '.out' if out_path is None else out_path
 	cmd_cpd_file = cmd_file + '.completed'
+	if not cont and os.path.exists(ckpt):
+		os.remove(ckpt)
+	if not cont and os.path.exists(cmd_cpd_file):
+		os.remove(cmd_cpd_file)
 	cmd_list = get_cmd_list(cmd_file, cmd_cpd_file, cmd_sep=cmd_sep, cont=cont)
 	exit = run_tasks(cmd_list, tc_tasks=tc_tasks, mode=mode, grid_opts=grid_opts, 
 				retry=retry, script=script, out_path=out_path, cont=cont,

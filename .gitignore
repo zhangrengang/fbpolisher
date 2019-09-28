@@ -6,3 +6,5 @@ mapping/
 polished/
 ref
 simulate_homopolymer/
+bin/*pyc
+benchmark/

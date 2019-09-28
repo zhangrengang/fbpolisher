@@ -95,7 +95,7 @@ def pre_cpu(cmd, func=sum):
 	return max(1, func(ncpus))
 def pre_mem(ref):
 	size = os.path.getsize(ref)
-	return '{}G'.format(int(max(size/1e9,0.5)*2))
+	return '{}G'.format(int(max(size/1e9,1)*2))
 def build_index(ref, prefix, mapper):
 	if mapper.startswith('bwa'):
 #		indice = [ '{}.{}'.format(ref, suffix) for suffix in ['amb', 'ann', 'bwt', 'pac', 'sa']]

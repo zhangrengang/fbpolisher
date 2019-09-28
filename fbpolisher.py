@@ -109,7 +109,7 @@ lib_2.R1.fq.gz'''
                     default=False,
                     help="re-run compeleted tasks [default=%(default)s]")
 	group_task.add_argument("-grid-opts", action="store", type=str,
-					default="-l h_vmem={mem} -pe mpi {cpu}", metavar='OPTS',
+					default="-tc {tc} -l h_vmem={mem} -pe mpi {cpu}", metavar='OPTS',
 					help='grid options [default="%(default)s"]')
 	group_task.add_argument("-cpu", action="store",
                     default=None, type=int, metavar='INT',
@@ -200,8 +200,7 @@ def pipeline(args):
 		out_genome = '{}.polished.{}.fa'.format(refbase, itr)
 		out_genome = realpath(out_genome)
 		logger.info('applying variants {}'.format(filt_vcf))
-		with open(out_genome, 'w') as fp:
-			vcf2fasta(filt_vcf, ref, fp)
+		vcf2fasta(filt_vcf, ref, out_genome)
 		ref = out_genome
 	logger.info('Finished')
 def exists(path):

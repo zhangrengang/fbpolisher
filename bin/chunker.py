@@ -14,7 +14,7 @@ def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq
 	for r1, r2, sample in zip(reads1, reads2, samples):
 		i += 1
 		for read, end in zip([r1, r2], [1, 2]):
-			if not exists(read):
+			if read is None:
 				continue
 			cat = xcat(read)
 			prefix = pre_tplt.format(dir=out_dir, id=i, end=end)
@@ -27,7 +27,7 @@ def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq
 				)
 			cmds.append(cmd)
 	cmd_file = '{}.cmds'.format(out_dir)
-	job_args['cpu'], job_args['mem'] = 1, '1g'
+	job_args['cpu'], job_args['mem'] = 1, '100m'
 	uncompleted = run_job(cmd_file, cmds, **job_args)
 	if not uncompleted == 0:
 		raise ValueError('chunk failed. see {}.out'.format(cmd_file))
