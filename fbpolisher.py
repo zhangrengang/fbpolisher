@@ -48,7 +48,7 @@ lib_2.R1.fq.gz'''
 	group_mapp = parser.add_argument_group('map reads', 'options to map reads')
 	group_mapp.add_argument("-mapper", action="store", metavar='CMD',
                     default='bwa mem', choices=['bwa mem', 'minimap2'],
-                    help="mapper to map reads against genome [default=%(default)s]")
+                    help="mapper to map reads against genome [default='%(default)s']")
 	group_mapp.add_argument("-map-opts", action="store",
                     default='-t 4', type=str, metavar='OPTS',
                     help="options for the mapper [default='%(default)s']")
