@@ -77,6 +77,7 @@ def split_sam_by_chunk_num(inSam, prefix, chunk_num):
 	# open files
 	outfiles = []
 	for chunk_id in range(chunk_num):
+		chunk_id += 1
 		outfile = '%s.%s.sam' % (prefix, chunk_id)
 		outfiles += [outfile]
 		hname = 'f%s' % (chunk_id,)
@@ -95,7 +96,7 @@ def split_sam_by_chunk_num(inSam, prefix, chunk_num):
 				exec '%s.write(header)' % (hname, )
 		chunk_id = i % chunk_num + 1
 		hname = 'f%s' % (chunk_id,)
-		exec '%s.write(header)' % (hname, )
+		exec '%s.write(line)' % (hname, )
 		i += 1
 	# close files
 	for chunk_id in range(chunk_num):

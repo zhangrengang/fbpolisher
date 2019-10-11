@@ -8,3 +8,4 @@ ref
 simulate_homopolymer/
 bin/*pyc
 benchmark/
+fbpolisher_test.py

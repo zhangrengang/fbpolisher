@@ -7,7 +7,7 @@ logging.basicConfig(level = logging.INFO,format = '%(asctime)s -%(levelname)s- %
 logger = logging.getLogger(__name__)
 bindir = os.path.dirname(os.path.realpath(__file__))
 sys.path = [bindir + '/bin'] + sys.path
-os.environ['PATH'] = '{}:{}'.format(bindir, os.environ['PATH'])
+os.environ['PATH'] = '{}:{}'.format(bindir + '/bin', os.environ['PATH'])
 from chunker import chunk_reads
 from rotate_seqs import rotate_seqs
 from mapper import map_reads
@@ -100,7 +100,7 @@ lib_2.R1.fq.gz'''
                     default='local', type=str, choices=['local', 'grid'],
                     help="run mode [default=%(default)s]")
 	group_task.add_argument("-tc", dest='tasks', metavar='INT',
-                    action="store", default=50, type=int,
+                    action="store", default=100, type=int,
                     help="maximum number of simultaneously running tasks [default=%(default)s]")
 	group_task.add_argument("-retry", action="store",
                     default=3, type=int, metavar='INT',
@@ -110,7 +110,10 @@ lib_2.R1.fq.gz'''
                     help="re-run compeleted tasks [default=%(default)s]")
 	group_task.add_argument("-grid-opts", action="store", type=str,
 					default="-tc {tc} -l h_vmem={mem} -pe mpi {cpu}", metavar='OPTS',
-					help='grid options [default="%(default)s"]')
+					help="grid options [default='%(default)s']")
+	group_task.add_argument("-grid-array", action="store", type=str,
+                    default=r"if [ $SGE_TASK_ID -eq {id} ]; then\n{cmd}\nfi", metavar='OPTS',
+                    help="template to run job-array tasks [default='%(default)s']")
 	group_task.add_argument("-cpu", action="store",
                     default=None, type=int, metavar='INT',
                     help="CPU required for each task [default=auto]")
@@ -135,6 +138,7 @@ def pipeline(args):
 		'cont': (not args.redo),
 		'cpu': args.cpu,
 		'mem': args.mem,
+		'template': args.grid_array,
 		}
 	map_args = dict(
 		mapper=args.mapper,

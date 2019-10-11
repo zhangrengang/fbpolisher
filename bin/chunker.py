@@ -19,6 +19,7 @@ def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq
 			cat = xcat(read)
 			prefix = pre_tplt.format(dir=out_dir, id=i, end=end)
 			split_list = prefix + '.list'
+			read = os.path.realpath(read)
 			cmd = template.format(
 				cat=cat, file=read,
 				dir=bindir, size=chunk_size,
@@ -27,7 +28,7 @@ def chunk_reads(reads_list, out_dir, ckpt=None, chunk_size=500000, seqfmt='fastq
 				)
 			cmds.append(cmd)
 	cmd_file = '{}.cmds'.format(out_dir)
-	job_args['cpu'], job_args['mem'] = 1, '100m'
+	job_args['cpu'], job_args['mem'] = 1, '1g' 	# '100m' or '0.1G' do not work in my SGE. so puzzle
 	uncompleted = run_job(cmd_file, cmds, **job_args)
 	if not uncompleted == 0:
 		raise ValueError('chunk failed. see {}.out'.format(cmd_file))

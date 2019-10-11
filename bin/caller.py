@@ -6,7 +6,7 @@ from RunCmdsMP import run_job
 MERGE_TEMPLATE = 'samtools merge -f {outbam} {inbams} {merge_opts}'
 INDEX_TEMPLATE = 'samtools index {inbam} {index_opts}'
 CALL_TEMPLATE = {
-	'freebayes': 'freebayes -f {genome} -r {region} {bam} {call_opts} > {outvcf}'
+	'freebayes': 'freebayes -f {genome} {region} {bam} {call_opts} > {outvcf}'
 	}
 def call_variants(ref, bams, out_dir, prefix=None, merge_opts='', index_opts='',
 		bin_size=1000000, caller='freebayes', call_opts='', filt_opts='-f QUAL > 20', **job_args):
@@ -34,22 +34,30 @@ def call_variants(ref, bams, out_dir, prefix=None, merge_opts='', index_opts='',
 	# call
 	cmds = []
 	vcfs = []
-	i = 0
-	for line in open(faidx):
-		fields = line.strip().split("\t")
-		chrom_name = fields[0]
-		chrom_length = int(fields[1])
-		for start in range(0, chrom_length, bin_size):
-			i += 1
-			end = start + bin_size
-			if end > chrom_length:
-				end = chrom_length
-			region = '{chrom}:{start}-{end}'.format(chrom=chrom_name, start=start, end=end)
-			outvcf = '{}/{}.{}.vcf'.format(out_dir, i, region)
-			cmd = CALL_TEMPLATE[caller].format(genome=ref, region=region,
-						bam=bam, call_opts=call_opts, outvcf=outvcf)
-			cmds += [cmd]
-			vcfs += [outvcf]
+	if bin_size is None:
+		region = ''
+		outvcf = outvcf = '{}/whole_genome.vcf'.format(out_dir,)
+		cmd = CALL_TEMPLATE[caller].format(genome=ref, region=region,
+					bam=bam, call_opts=call_opts, outvcf=outvcf)
+		cmds += [cmd]
+		vcfs += [outvcf]
+	else:
+		i = 0
+		for line in open(faidx):
+			fields = line.strip().split("\t")
+			chrom_name = fields[0]
+			chrom_length = int(fields[1])
+			for start in range(0, chrom_length, bin_size):
+				i += 1
+				end = start + bin_size
+				if end > chrom_length:
+					end = chrom_length
+				region = '-r {chrom}:{start}-{end}'.format(chrom=chrom_name, start=start, end=end)
+				outvcf = '{}/{}.{}.vcf'.format(out_dir, i, region)
+				cmd = CALL_TEMPLATE[caller].format(genome=ref, region=region,
+							bam=bam, call_opts=call_opts, outvcf=outvcf)
+				cmds += [cmd]
+				vcfs += [outvcf]
 	cmd_file = '{}.call.cmds'.format(out_dir)
 	job_args['cpu'] = 1
 	job_args['mem'] = '2G'

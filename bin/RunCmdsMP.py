@@ -4,7 +4,7 @@
 import sys
 import os, stat
 import shutil
-import psutil
+#import psutil
 import subprocess
 from optparse import OptionParser
 import logging
@@ -27,12 +27,13 @@ class Grid(object):
 	def __init__(self, cmd_list=None, 
 			work_dir=None, out_path=None, 
 			err_path=None, grid_opts='',
-			cpu=1, mem='1g',
+			cpu=1, mem='1g', template=None, 
 			tc_tasks = None, script=None,
 			join_files=True):
 		self.cmd_list = cmd_list
 		self.grid = self.which_grid()
 		self.grid_opts = grid_opts
+		self.template = template
 #		if tc_tasks is not None:
 #			if self.grid == 'sge':
 #				self.grid_opts += ' -tc {}'.format(tc_tasks)
@@ -66,11 +67,11 @@ class Grid(object):
 			
 	def make_script(self, fout=sys.stdout):
 		print >> fout, '#!/bin/bash'
-		if self.grid == 'sge':
+		if self.template is None and self.grid == 'sge':
 #			print >> fout, '#$ {}'.format(self.grid_opts)
-			template = 'if [ $SGE_TASK_ID -eq {id} ]; then\n{cmd}\nfi'
+			self.template = 'if [ $SGE_TASK_ID -eq {id} ]; then\n{cmd}\nfi'
 		for i, cmd in enumerate(self.cmd_list):
-			grid_cmd = template.format(id=i+1, cmd=cmd)
+			grid_cmd = self.template.format(id=i+1, cmd=cmd)
 			print >> fout, grid_cmd
 	def submit(self):
 		job_status = []
@@ -112,7 +113,7 @@ class Grid(object):
 		if grid == 'OGS/GE':
 			return 'sge'
 def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='', cpu=1, mem='1g', cont=1,
-			retry=1, script=None, out_path=None, completed=None, cmd_sep='\n', **kargs):
+			retry=1, script=None, out_path=None, completed=None, cmd_sep='\n', template=None, **kargs):
 	if not cmd_list:
 		logger.info('cmd_list with 0 command. exit with 0')
 		return 0
@@ -123,8 +124,8 @@ def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='', cpu=1, mem='1g
 
 	close_cmp = False
 	# file name
+	xmod = 'a' if cont else 'w'
 	if completed is not None and not isinstance(completed, file):
-		xmod = 'a' if cont else 'w'
 		completed = open(completed, xmod)
 		close_cmp = True
 	ntry = 0
@@ -150,10 +151,10 @@ def run_tasks(cmd_list, tc_tasks=None, mode='grid', grid_opts='', cpu=1, mem='1g
 			logger.info('reset tc_tasks to {} by {}'.format(tc_tasks, avail_tasks))
 			job_status = pp_run(cmd_list, processors=tc_tasks)
 			exit_codes = []
-			fout = open(out_path, 'w') if out_path is not None else None
+			fout = open(out_path, xmod) if out_path is not None else None
 			for (stdout, stderr, status) in job_status:
 				if fout is not None:
-					print >>fout, '>>STATUS\n{}\n>>STDOUT\n{}\n>>STDERR\n{}'.format(status, stdout, stderr)
+					print >>fout, '>>STATUS:\t{}\n>>STDOUT:\n{}\n>>STDERR:\n{}'.format(status, stdout, stderr)
 				exit_codes += [status]
 			if fout is not None:
 				fout.close()
@@ -177,6 +178,7 @@ def avail_cpu(cpu):
 	cpu_count = psutil.cpu_count()
 	return max(1, int(1.0*cpu_count/cpu))
 def avail_mem(mem):
+	import psutil
 	memory = psutil.virtual_memory()
 	mem_free = memory.available
 	mem = mem2float(mem)
@@ -384,6 +386,8 @@ def run_job(cmd_file, cmd_list=None, tc_tasks=8, mode='grid', grid_opts='', cont
 		os.remove(ckpt)
 	if not cont and os.path.exists(cmd_cpd_file):
 		os.remove(cmd_cpd_file)
+	if not cont and os.path.exists(out_path):
+		os.remove(out_path)
 	cmd_list = get_cmd_list(cmd_file, cmd_cpd_file, cmd_sep=cmd_sep, cont=cont)
 	exit = run_tasks(cmd_list, tc_tasks=tc_tasks, mode=mode, grid_opts=grid_opts, 
 				retry=retry, script=script, out_path=out_path, cont=cont,
