@@ -5,7 +5,8 @@ It is developed to polish noisy genome assembly with high-quality short reads.
 #### Dependencies:
 + [python 2.7](https://www.python.org/)  
 	+ [dramaa](https://github.com/pygridtools/drmaa-python)
-	+ [parallel python](https://www.parallelpython.com/): quickly install by `pip install pp`
+	+ [parallel python](https://www.parallelpython.com/): quickly install by `pip install pp`  
+
 The binaries of following program are also provided in `bin/`. If them do not work, please re-install.
 + [bwa](https://github.com/lh3/bwa)
 + [samtools](https://github.com/samtools/samtools)
